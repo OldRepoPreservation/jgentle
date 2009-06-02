@@ -1,4 +1,4 @@
-#labels Phase-Implementation
+#labels Phase-Implementation,UnderstandingdependencyinjectionviaJGentleHelloworld_Vietnamese
 ==Cơ bản về IoC trong JGentle==       
 
 
