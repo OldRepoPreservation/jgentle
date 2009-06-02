@@ -58,16 +58,15 @@ class A {
 
                 Nhưng vấn đề vẫn chưa dừng lại tại đây, vì trong toàn bộ ứng dụng để có thể tạo nên các mối quan hệ giữa các object thật sự, bạn cần phải khởi tạo các đối tượng tương ứng và cung cấp cho class A mỗi khi bạn cần “new” một đối tượng từ A. Hay nói cách khác, mỗi khi bạn cần có một object A để sử dụng tại một nơi nào đó trong ứng dụng, bạn cần phải khởi tạo toàn bộ các ràng buộc của A thông qua constructor hoặc setter method, vd ở đây chính là IX obj:
 
-                {{{
-                A a = new A(new B());
+{{{
+A a = new A(new B());
 
-                hoặc
+hoặc
 
-                A a = new A();
+A a = new A();
 
-                a.setObj(new B());
-                }}}
-
+a.setObj(new B());
+}}}
 
                Các mối quan hệ lúc này sẽ được thiết lập ngay trong code mỗi khi ta cần “new” một đối tượng. Việc làm này tưởng chừng như là bắt buộc và vô hại nhưng thật sự lại ảnh hưởng đến việc maintainability và testability cho toàn bộ ứng dụng. Hãy xem xét lại vấn đề cũ nếu như ta cần thay B bằng C ?? Lúc này tất cả những vị trí nào có new B() chúng ta sẽ phải thay bằng new C(). Nếu trong ứng dụng có 100 vị trí như thế này chúng ta sẽ cần phải tìm và thay thế ngần ấy vị trí. Và điều gì sẽ phát sinh trong lúc chúng ta phát triển code khi cần thay new B() bằng một mock object để đáp ứng yêu cầu testing ?? Lúc này chi phí cho việc test ứng dụng, thay đổi và bảo trì code lại một lần nữa sẽ là vấn đề lớn nếu ứng dụng càng mở rộng.
 
@@ -165,9 +164,9 @@ abstract class Config implements Configurable {
 
                Xem xét qua hàm main lúc này thì việc khởi tạo container có chút thay đổi, tham số truyền vào cho buildProvider() method là đối tượng object class của class Config. Class Config chính là cách thức cấu hình trong JGentle. Thay vì sử dụng XML hay script language, JGentle tận dụng bản thân Java language làm phương tiện cấu hình, các thông tin chỉ định sẽ được viết trong configure() method. Dòng lệnh sau:
 
-          {{{
-          attach(Hello.class).to(HelloWorld.class);
-          }}}
+{{{
+attach(Hello.class).to(HelloWorld.class);
+}}}
 
                chỉ định cho JGentle Container biết rằng mỗi khi có yêu cầu cần inject đến một kiểu type là Hello thì hãy khởi tạo object bean bằng class HelloWorld. Giờ đây khi có bất kì thay đổi nào trên class Bean, ví dụ thay HelloWorld bằng một implementation nào đó khác bạn chỉ cần vào Config class, đổi lại thông tin trong attach() method, thay thế HelloWorld.class bằng một XYZ.class nào đó để có được một cách thức vận hành mới trên class Bean. Các phụ thuộc hay reference giờ đây được quản lý tập trung tại một nơi, đó là configure() method, mọi sự thay đổi hay thiết lập reference sẽ được JGentle container quản lý thay vì developer trực tiếp xử lý thông qua mã code của ứng dụng, và khi này class Bean chỉ cần quan tâm rằng nó cần phụ thuộc đến cái gì, còn việc khởi tạo ra sự phụ thuộc ấy ở đâu, thế nào, ra làm sao đã có IoC container giải quyết. 
 
@@ -182,7 +181,6 @@ abstract class Config implements Configurable {
    # Không thể thay đổi cách thức cấu hình nếu như không compile lại logic class.
 
       Đó là một số vấn đề mà với cách cấu hình cơ bản của JGentle cũng như tương tự cho các DI framework khác có sử dụng annotation như trên không thể giải quyết tường tận do phải đương đầu với vấn đề explicit config thông qua annotation. Tuy nhiên đó không phải là cách thức duy nhất để chỉ định DI trong JGentle, và cũng không phải là cách thức tiêu chuẩn mà JGentle khuyến cáo khi cấu hình, làm việc với IoC. Thực chất cách thức trên chỉ như là một thành phần mở rộng của JGentle, nó không nằm trong design chi tiết lúc đầu, việc đưa vào explicit config được xem như là một giải pháp bổ sung, giúp cho developer có thêm một lựa chọn khi làm việc với DI trong JGentle. Chúng ta sẽ bàn điều này chi tiết trong những bài viết khác về cách thức JGentle quản lý DI.
-
 
     * * Tóm lược: *
 
