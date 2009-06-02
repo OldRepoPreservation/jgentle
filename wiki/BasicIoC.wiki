@@ -1,0 +1,189 @@
+#labels Phase-Implementation
+==Cơ bản về IoC trong JGentle==       
+
+
+Thành phần cơ bản và cốt lõi nhất trong hệ thống JGentle đó chính là một IoC container (Inversion Of Control) hay DI (Dependency Injection). Do đó trước khi nói bất kì điều gì về JGentle cung cấp cho chúng ta có lẽ ta cần tự đặt câu hỏi liệu ta có cần đến một hệ thống IoC trong ứng dụng? Khi nào và sẽ như thế nào? ... Câu trả lời sẽ tùy thuộc vào bản chất hệ thống mà bạn đang xây dựng, sự lệ thuộc mã code của hệ thống hiện tại với nền tảng hệ thống code cũ và điều quan trọng nhất là liệu bạn đã thực sự muốn thay đổi ... trong phong cách lập trình OOP thuần túy sang một phong cách mới trong IoC. Sẽ là điều khó chấp nhận cho một developer nếu như ứng dụng một hệ thống khác vào trong hệ thống code của anh ta mà vấn đề thuộc về tư tưởng không được đem ra bàn thảo và mổ xẻ. Do vậy, nếu như đây là lần đầu tiên bạn tiếp cận khái niệm IoC, đừng quá lo lắng, chúng ta sẽ thảo luận từ những điều đơn giản nhất bắt đầu từ bài viết này, còn nếu như bạn là người đã có nhiều kinh nghiệm với IoC, bạn có thể bỏ qua phần giải thích cơ bản mà đến ngay phần hiện thực trên JGentle để có những nhận xét về cách JGentle triển khai DI so với những hệ thống IoC khác. Ở đây chúng ta sẽ chỉ thảo luận về IoC dừng lại ở mức khái niệm, nếu như bạn muốn tìm hiểu chi tiết hơn có thể tham khảo thêm qua bài viết sau Inversion of Control Containers and the Dependency Injection Pattern về IoC va DI của Martin Fowler.
+
+       Okie, hoàn tất phần mở bài! Vậy đâu là vấn đề mà IoC muốn giải quyết ?? ta cùng xem xét qua mẫu code đơn giản sau:
+
+{{{
+class A {
+    B b;
+
+    public A(B b) {
+       this.b = b;
+    }
+
+    public void setB(B b) {
+       this.b = b;
+    }
+}
+
+class B {
+}
+}}}
+
+                Class A ở đây có một thuộc tính là 'b' có kiểu type là class B. Do đó chúng ta nói class A có một phụ thuộc (dependency) đến class B. Sự phụ thuộc của class A sẽ càng gia tăng nếu class A càng có nhiều các properties có reference đến các class khác trong cùng hệ thống. Và cũng như ngược lại nếu như càng có nhiều các class khác nhau có reference đến class A hoặc B. Trong một ứng dụng thật sự, hầu hết bạn cần phải có từ 2 đến nhiều, cho đến rất nhiều class khác nhau có reference chồng chéo lẫn nhau. Mối quan hệ trực tiếp giữa class tới class thế này ta gọi là tightly-couple (sự ràng buộc chặt chẽ). Khi đó, mức độ phụ thuộc của toàn ứng dụng sẽ càng gia tăng khi ứng dụng ngày càng mở rộng. Điều này sẽ dẫn đến việc chỉ cần một sự thay đổi nhỏ (vd theo yêu cầu mới chúng ta cần thay class B bằng class C) chúng ta cần phải thay thế tất cả vị trí có reference đến class B bằng class C trong toàn ứng dụng. Rõ ràng với cách này là không tốt chút nào, vì nếu hệ thống càng lớn thì sự thay đổi trong những chi tiết sẽ càng nhiều, và có thể có nguy cơ làm tê liệt toàn bộ nếu sự thay đổi là không chính xác và triệt để. Để giảm bớt mức độ phụ thuộc giữa các thành phần trong ứng dụng, chúng ta cần “lỏng lẻo hóa” các mối quan hệ. Ví dụ bạn có thể thay class B bằng một interface IX bất kì như sau:
+
+{{{
+interface IX {
+}
+
+class B implements IX{
+}
+
+class C implements IX{
+}
+}}}
+
+
+         Khi này thay vì refer trực tiếp đến class B hay class C, class A chỉ refer đến interface của chúng:
+
+{{{
+class A {
+   IX obj;
+
+   public A(IX obj) {
+      this.obj = obj;
+   }
+
+   public void setObj(IX obj) {
+      this.obj = obj;
+   }
+}
+}}}
+
+                Mọi sự thay đổi sau này bạn chỉ cần có là 1 implementation của IX sau đó đối tượng thật sự sẽ được truyền vào thông qua constructor hoặc setter method. Lúc này class A không cần bất kì thay đổi nào cũng có thể đáp ứng yêu cầu phát sinh khi cần mở rộng. Do đó mối quan hệ chỉ thông qua interface thế này sẽ “lỏng lẻo” hơn so với trực tiếp từ “class đến class”, và ta gọi một mối quan hệ kiểu này là loosely-couple (sự ràng buộc lỏng lẻo).
+
+
+                Nhưng vấn đề vẫn chưa dừng lại tại đây, vì trong toàn bộ ứng dụng để có thể tạo nên các mối quan hệ giữa các object thật sự, bạn cần phải khởi tạo các đối tượng tương ứng và cung cấp cho class A mỗi khi bạn cần “new” một đối tượng từ A. Hay nói cách khác, mỗi khi bạn cần có một object A để sử dụng tại một nơi nào đó trong ứng dụng, bạn cần phải khởi tạo toàn bộ các ràng buộc của A thông qua constructor hoặc setter method, vd ở đây chính là IX obj:
+
+                {{{
+                A a = new A(new B());
+
+                hoặc
+
+                A a = new A();
+
+                a.setObj(new B());
+                }}}
+
+
+               Các mối quan hệ lúc này sẽ được thiết lập ngay trong code mỗi khi ta cần “new” một đối tượng. Việc làm này tưởng chừng như là bắt buộc và vô hại nhưng thật sự lại ảnh hưởng đến việc maintainability và testability cho toàn bộ ứng dụng. Hãy xem xét lại vấn đề cũ nếu như ta cần thay B bằng C ?? Lúc này tất cả những vị trí nào có new B() chúng ta sẽ phải thay bằng new C(). Nếu trong ứng dụng có 100 vị trí như thế này chúng ta sẽ cần phải tìm và thay thế ngần ấy vị trí. Và điều gì sẽ phát sinh trong lúc chúng ta phát triển code khi cần thay new B() bằng một mock object để đáp ứng yêu cầu testing ?? Lúc này chi phí cho việc test ứng dụng, thay đổi và bảo trì code lại một lần nữa sẽ là vấn đề lớn nếu ứng dụng càng mở rộng.
+
+
+               Rõ ràng với cách tư duy thông thường, điều này quá là phi lý khi mỗi lần test một thành phần hay toàn bộ khối hệ thống với một mock object chỉ định, chúng ta phải chỉnh sửa lại tất cả những vị trí nhất định có liên quan. Thực tế, mỗi khi test ứng dụng, chúng ta không hề mong muốn phải phá vỡ cấu trúc code tại những vị trí nào đó, thay vì thế chúng ta chỉ cần đơn giản viết test tại một nơi, thay đổi một số thông tin cần thiết cho việc testing, chạy một tập hợp hàng loạt các test và cuối cùng là chờ đợi kết quả. Chắc chắn là bạn cũng như tôi đều đồng ý đó là điều đúng đắn và ít tốn kém nhất. Tuy rằng việc này không yêu cầu bất kì điều gì đặc biệt trong thiết kế code nhưng yêu cầu ứng dụng cần phải đáp ứng được một sự loosely-couple hoàn toàn cả ở mức class design cũng như lúc khởi tạo mối quan hệ (từ khóa new). Và điều quan trọng nhất chính là các mối quan hệ phụ thuộc lẫn nhau giữa các object cần phải được quản lý. Các mối quan hệ khi này giữa các object bean cần phải được tập trung hóa tại một nơi nào đó để việc thay đổi hay chỉnh sửa là đơn giản nhất có thể thay vì developer phải tự làm điều ấy trong mã code. Đó chính là điều mà IoC cố gắng giải quyết.
+
+
+    * * Inversion of Control hay Dependency Injection: *
+
+          Thuật ngữ Inversion Of Control container (IoC) hay còn có thể được biết đến với một khái niệm tương tự đó là Dependency Injection (DI) - một thuật ngữ được đưa ra bởi Martin Fowler và Rod Johnson (cha đẻ Spring framework) cùng nhóm phát triển PicoContainer vào khoảng cuối năm 2003. Inversion of Control hay dịch nôm na là “đảo ngược sự điều khiển” hàm ý các mối quan hệ giữa các thành phần object trong hệ thống thay vì như trước đây được khởi tạo và thiết lập trong mã code thì nay được giao lại cho container quản lý. Container sẽ quản lý các mối quan hệ dựa trên dữ liệu thông tin cấu hình cung cấp (có thể là 1 file XML, Annotation hay một file property bất kì, ...), sau đó sẽ khởi tạo lên các object beans, tạo các kết nối trong bean, theo đó các dependency sẽ được inject vào bean bởi contatiner và … cuối cùng là return lại cho phía client. Chữ “đảo ngược” chính là thể hiện sự đảo ngược quyền kiểm soát cũng như quản lý các mối quan hệ hay việc khởi tạo lên các object trong hệ thống.
+
+
+           Dependency Injection (DI) – có thể hiểu nôm na là “việc tiêm sự phụ thuộc” hàm ý thể hiện việc “tiêm” các dependencies từ bên ngoài vào trong object bean lúc bean được khởi tạo hay trong một thời điểm nào đó của hệ thống. Việc “tiêm sự phụ thuộc” chính là ám chỉ công việc mà container sẽ làm khi khởi tạo các mối quan hệ giữa các beans trong hệ thống. Đôi khi bạn sẽ thấy trong một số sách viết về IoC, việc sử dụng 2 thuật ngữ IoC hay DI được xem như tương đương và đồng nhất với nhau đó cũng chính là do bản chất của công việc mà container sẽ thực hiện này. Riêng tôi thì tôi thích sử dụng IoC hiểu ở một phạm vi rộng hơn của DI, như IoC container thay vì DI container vì những control của container không chỉ dừng lại ở việc thiết lập các mối quan hệ mà còn thể hiện việc quản lý các object beans, khởi tạo, và điều phối vòng đời của beans trong các scope cũng như việc quản lý thông tin metadata ... IoC mang dáng dấp và phạm trù rộng hơn và chi tiết hơn là DI chỉ thể hiện việc inject các dependencies.
+
+    * * Hello World với Dependency Injection trong JGentle: *
+
+           Có quá nhiều các DI framework hay IoC container ngoài kia, ví dụ như Spring, PicoContainer, Hivemind, Guice, Bijection của JBoss Seam, Butterfly, … Một số sử dụng file XML làm dữ liệu thông tin cấu hình, một số sử dụng Annotation, … một số khác lại xây dựng một script language riêng để tùy biến hóa việc thiết lập DI. Việc lựa chọn cũng như sử dụng framework nào tùy thuộc vào mục đích cũng như khả năng cung cấp các tính năng của framework trong những trường hợp cụ thể.
+
+
+           Ở đây tôi sử dụng JGentle ở mức cơ bản nhất để cấu hình DI cho ví dụ “Hello world”, nó không hề thể hiện khả năng hay ưu điểm gì vượt trội của JGentle và đó cũng không phải là cách cấu hình tối ưu cũng như tiêu chuẩn trong JGentle ... nhưng sẽ giúp bạn phần nào hiểu được cách mà một IoC container hoạt động.
+
+
+           Quay lại với ví dụ cũ lúc đầu, tương tự như thế nhưng ta cần chỉnh sửa đôi chút:
+
+{{{
+class Bean {
+   @Inject
+   public HelloWorld obj;
+}
+
+class HelloWorld {
+   String hello = "Hello world";
+
+   public void sayHello() {
+       System.out.println(hello);
+   }
+}
+}}}
+
+
+             Class Bean cũng tương tự như class A trong ví dụ trước, có một phụ thuộc là 'obj' mang kiểu type là class HelloWorld. Nhưng khác với class A, property 'obj' ở đây được đính kèm thêm một annotation là @Inject (nằm trong gói package org.jgentleframework.configure.annotation). Việc chỉ định @Inject ở đây nhằm thông báo cho JGente container biết rằng đây chính là là vị trí cần inject dependency. Theo mặc định, JGentle sẽ dựa trên type của property để khởi tạo object tương ứng và sau đó là inject vào vị trí chỉ định này nếu như không có cấu hình nào đặc biệt. Đối với JGentle, thế là chúng ta đã hoàn tất việc cấu hình. Xem lại class Bean ta thấy không có điểm gì khác biệt với 1 class bình thường ngoại trừ thuộc tính 'obj' được chỉ định thêm annotation @Inject.
+
+
+              Bây giờ tại bất kì đâu trong ứng dụng, thay vì ta phải new Bean(), thì giờ đây ta sẽ get bean ra từ container thông qua method getBean(). Xem qua code của hàm main như sau:
+
+{{{
+public static void main(String[] args) {
+
+     Provider provider = JGentle.buildProvider();
+     Bean bean = (Bean) provider.getBean(Bean.class);
+     bean.obj.sayHello();
+}
+}}}
+
+              Việc đầu tiên là sẽ khởi tạo container, thông qua buildProvider() method. Việc khởi tạo này sẽ thực hiện 1 lần duy nhất và sử dụng cho toàn bộ ứng dụng tại bất kì vị trí nào cần khởi tạo bean. Sau đó sẽ là getBean ra từ container thông qua Bean bean = (Bean) provider.getBean(Bean.class); Tham số truyền vào cho getBean() method chỉ là đối tượng object class của class Bean. Và sau cùng là triệu gọi phương thức sayHello() trên đối tượng phụ thuộc là 'obj'. Khi getBean() method được invoked, container sẽ truy tìm tất cả dependencies trên class Bean, nếu như tìm thấy vị trí cần phải được inject, container sẽ khởi tạo đối tượng bean tương ứng, thiết lập reference, sau đó cuối cùng mới là return lại cho phía client một object bean hoàn chỉnh. Lúc này container đóng vai trò như một nhà máy sản xuất bean, dựa trên bản thiết kế được chỉ định, bean sẽ được khởi tạo.
+
+               Xong !! lúc này bạn có thể run thử ứng dụng, và xem thành quả.
+
+               Nhưng câu hỏi đặt ra là tôi vẫn chưa thấy được việc ích lợi gì khi thay thế class HelloWorld bằng một implementation khác?? Để giải quyết vấn đề này ta cần sửa lại mã code sau một chút:
+
+{{{
+class Bean {
+   @Inject
+   Hello obj;
+}
+
+interface Hello {
+   public void sayHello();
+}
+
+class HelloWorld implements Hello {
+   public void sayHello() {
+
+      System.out.println("Hello world !");
+   }
+}
+
+abstract class Config implements Configurable {
+   @Override
+   public void configure() {
+
+      attach(Hello.class).to(HelloWorld.class);
+   }
+
+   public static void main(String[] args) {
+       Provider provider = JGentle.buildProvider(Config.class);
+       Bean bean = (Bean) provider.getBean(Bean.class);
+       bean.obj.sayHello();
+   }
+}
+}}}
+
+               Class Bean thay vì refer trực tiếp đến class HelloWorld thì giờ refer đến interface Hello. Class HelloWorld giờ đây là một implementation của interface Hello. Còn lại thì vẫn giữ nguyên như cũ.
+
+
+               Xem xét qua hàm main lúc này thì việc khởi tạo container có chút thay đổi, tham số truyền vào cho buildProvider() method là đối tượng object class của class Config. Class Config chính là cách thức cấu hình trong JGentle. Thay vì sử dụng XML hay script language, JGentle tận dụng bản thân Java language làm phương tiện cấu hình, các thông tin chỉ định sẽ được viết trong configure() method. Dòng lệnh sau:
+
+          {{{
+          attach(Hello.class).to(HelloWorld.class);
+          }}}
+
+               chỉ định cho JGentle Container biết rằng mỗi khi có yêu cầu cần inject đến một kiểu type là Hello thì hãy khởi tạo object bean bằng class HelloWorld. Giờ đây khi có bất kì thay đổi nào trên class Bean, ví dụ thay HelloWorld bằng một implementation nào đó khác bạn chỉ cần vào Config class, đổi lại thông tin trong attach() method, thay thế HelloWorld.class bằng một XYZ.class nào đó để có được một cách thức vận hành mới trên class Bean. Các phụ thuộc hay reference giờ đây được quản lý tập trung tại một nơi, đó là configure() method, mọi sự thay đổi hay thiết lập reference sẽ được JGentle container quản lý thay vì developer trực tiếp xử lý thông qua mã code của ứng dụng, và khi này class Bean chỉ cần quan tâm rằng nó cần phụ thuộc đến cái gì, còn việc khởi tạo ra sự phụ thuộc ấy ở đâu, thế nào, ra làm sao đã có IoC container giải quyết. 
+
+    * * Vấn đề phát sinh: *
+
+               Có thể thấy mặc dù việc thay thế cách thức new bean thông thường bằng cách get bean từ container theo ví dụ HelloWorld trên là đơn giản, dễ dàng triển khai cũng như rất trong sáng. Nhưng cách thức này vẫn tồn tại một số vấn đề cần giải quyết:
+
+   # Bị một ràng buộc nhất định vào framework do cần phải chỉ định annotation @inject, class chỉ định giờ đây không hoàn toàn POJOs. Điều này sẽ nảy sinh một số rắc rối nhỏ nếu bạn muốn thay thế DI framework hiện hành bằng một DI framework khác trong tương lai.   
+   # Thông tin @Inject được gắn kết khắp mọi nơi trong hệ thống, bất kì vị trí nào cần chỉ định inject. Điều này sẽ dẫn đến một cách quản lý phi tập trung cho các injection.   
+   # Không thể chỉ định DI @Inject trên Third party library.   
+   # Không thể có 2 cách cấu hình khác nhau trong cùng một object class, do chỉ định @inject là explicit config và trong cùng một thực thể chỉ định không thể có nhiều hơn 2 annotation được gắn kết. Vd bạn không thể có 1 cấu hình class X là chỉ định @Inject property 'a' nhưng 1 cấu hình khác lại chỉ định @Inject trên property 'b' .   
+   # Không thể thay đổi cách thức cấu hình nếu như không compile lại logic class.
+
+      Đó là một số vấn đề mà với cách cấu hình cơ bản của JGentle cũng như tương tự cho các DI framework khác có sử dụng annotation như trên không thể giải quyết tường tận do phải đương đầu với vấn đề explicit config thông qua annotation. Tuy nhiên đó không phải là cách thức duy nhất để chỉ định DI trong JGentle, và cũng không phải là cách thức tiêu chuẩn mà JGentle khuyến cáo khi cấu hình, làm việc với IoC. Thực chất cách thức trên chỉ như là một thành phần mở rộng của JGentle, nó không nằm trong design chi tiết lúc đầu, việc đưa vào explicit config được xem như là một giải pháp bổ sung, giúp cho developer có thêm một lựa chọn khi làm việc với DI trong JGentle. Chúng ta sẽ bàn điều này chi tiết trong những bài viết khác về cách thức JGentle quản lý DI.
+
+
+    * * Tóm lược: *
+
+                Với IoC hay DI, việc quản lý code cũng như bảo trì code trở nên đơn giản hơn, gia tăng khả năng module hóa cũng như testability và maintainability. IoC không chỉ được đề cập như là một cách thức quản lý code hiệu quả mà nó thật sự đề ra một hướng đi mới cho việc lập trình, một phong cách lập trình dựa trên dữ liệu cấu hình. Ý tưởng về một bản thiết kế cho hệ thống ở mức code thật sự được triển khai dễ dàng với IoC. Với cùng một hệ thống class nhưng với các cách thức cấu hình khác nhau (chỉ định wiring giữa các bean) sẽ có những cách thức vận hành khác nhau. Việc thay đổi hay chỉnh sửa để có được cách thức vận hành mới được giảm xuống đến mức tối đa có thể. Do đó chi phí cho những phát sinh không đáng có cũng được loại trừ. 
