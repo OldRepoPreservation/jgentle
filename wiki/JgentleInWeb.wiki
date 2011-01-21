@@ -1,7 +1,7 @@
 #summary Install JGentle in web application
 #labels Featured,Phase-Implementation
 = Sử dụng JGentle như một IOC container trong môi trường web =
-Hiện tại r98 của Jgentle đã cho phép chúng ta sử dụng Jgentle như một IOC container cả môi trường application và web
+Hiện tại [http://code.google.com/p/jgentle/downloads/detail?name=jgentle-0.9.jar&can=2&q=#makechanges r98] của Jgentle đã cho phép chúng ta sử dụng Jgentle như một IOC container cả môi trường application và web
 = Trong ứng dụng(application) =
 Tạo Provider thông qua JGentle và sử dung Provider để lấy ra các bean
 {{{
