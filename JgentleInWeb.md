@@ -1,0 +1,38 @@
+# Sử dụng JGentle như một IOC container trong môi trường web #
+Hiện tại [Jgentle r98](http://code.google.com/p/jgentle/downloads/detail?name=jgentle-0.9.jar&can=2&q=#makechanges) đã cho phép chúng ta sử dụng Jgentle như một IOC container cả môi trường application và web application
+# Trong ứng dụng(application) #
+Tạo Provider thông qua JGentle và sử dung Provider để lấy ra các bean
+```
+public static void main(String[] args) {
+
+                Provider provider = JGentle.buildProvider(ConfigZ.class);
+                provider.getBean(.....);
+.......
+}
+```
+# Trong môi trường web #
+
+Nay có thể sử dụng IOC của Jgentle trên nền web một các dễ dàng thông
+qua org.jgentleframework.web.WebContextLoaderListener như sau:
+```
+web.xml
+..............
+<context-param>
+    <param-name>jgentleConfigClass</param-name>
+    <param-value>ConfigZ</param-value>
+</context-param>
+<listener>
+    <listener-class>org.jgentleframework.web.WebContextLoaderListener</
+listener-class>
+</listener>
+..................
+```
+Để sử dụng Provider ta dùng org.jgentleframework.web.WebUtils
+```
+Abc.java
+..........
+ServletContext context = ....;
+Provider  provider = WebUtils.getProvider(context);
+provider.getBean(.....);
+.......... 
+```

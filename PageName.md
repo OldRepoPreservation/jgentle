@@ -1,0 +1,92 @@
+## Implicit @Inject configuration ##
+
+Như đã nói trong [bài viết trước](http://code.google.com/p/jgentle/wiki/BasicIoC), việc chỉ định _explicit @Inject_ gây ra khá nhiều điều phiền phức, nếu như hệ thống của bạn không được dự trù cho việc sử dụng **IoC** như thế nào ngay từ đầu!! Để tránh khỏi những vướng mắc khi cần sử dụng IoC trên nền tảng của một hệ thống code có sẵn, _third libraries_, hay đối với các nhà phát triển thư viện, yêu cầu một khả năng _POJOs IoC_ là một điều cần thiết. Hay nói cách khác hệ thống _IoC container_ cần phải có khả năng đáp ứng trọn vẹn chức năng DI nhưng không bắt buộc người sử dụng phải thêm, chỉnh sửa hay khởi tạo bất kì ràng buộc nào giữa _framework_ vào trong các _logic classes_ của họ. Điều này sẽ chẳng là vấn đề và cũng không cần thiết phải nhắc đến đối với các _framework_ sử dụng **_XML_** để cấu hình nhưng nó lại là vấn đề mấu chốt cần phải giải quyết trên các _framework_ sử dụng annotation. Lý do chính của vấn đề này chính là cách sử dụng _annotation @Inject_ (hay các _annotation_ tương tự khác) trực tiếp trên _logic classes_ (xem phần vấn đề phát sinh tại [bài viết này](http://code.google.com/p/jgentle/wiki/BasicIoC)).
+
+Do đó, thay vì sử dụng _annotation_ trực tiếp thông qua _reflection_ tại thời điểm _run-time_, _compile-time_ hoặc _classloading-time_. JGentle gián tiếp truy vấn dữ liệu các _annotations_ thông qua _Definition_ (một loại _metadata object_ chứa đựng thông tin các _annotations_ được tạo lập bởi _JGentle container_ tại thời điểm _run-time_ dựa trên các _logic classes_). Thông qua _Definition_, _JGentle_ có thể có toàn quyền truy vấn, tìm kiếm thậm chí chỉnh sửa, thay đổi (điều không được phép khi thao tác với _reflection_ do thông tin _annotation_ là _read-only_) thông tin dữ liệu _annotations_. Không loại bỏ hoàn toàn cách cấu hình _annotation_ truyền thống (như một số _DI framework_ sử dụng _script language_), cũng không quay lại với **_XML_** để đối mặt với **_XML hell_**, _JGentle_ tạo ra một cơ chế riêng **_mixin_** giữa _annotation_ và _Definition_ để tùy biến hóa cơ chế cấu hình DI. Thực chất Definition không phải chỉ được tập trung xây dựng cho nhu cầu DI trong JGentle, mà _Definition_ có thể được sử dụng như một hệ thống _toolkit_ tách rời cho phép _developer_ có thể quản lý dữ liệu _run-time annotation_ của chính mình tốt hơn thay vì thông qua _reflection_ như trước đây. Chúng ta sẽ quay lại chi tiết các chức năng của _Definition_ và _Definition Manager_ trong _JGentle container_ trong một bài viết khác.
+
+Dựa trên nền tảng _Definition_, ngoài cách cấu hình DI theo cách chỉ định tường minh _@Inject_ trên từng thành phần _elements_ cụ thể, JGentle còn cung cấp một khả năng cấu hình _implicit @Inject_. Lúc này toàn bộ thông cấu hình chỉ nằm trọn vẹn trong _Configurable Class (một abstract class được cài đặt Configurable interface hoặc được kế thừa từ AbstractConfig class)_, không còn bất cứ _@Inject annotation_ nào nhưng vẫn đảm bảo dữ liệu DI được thực thi đúng đắn. Chúng ta cùng xem qua ví dụ mẫu sau:
+
+> Chúng ta có một mối quan hệ đơn giản như sau:
+
+```
+class Bean {
+     private Service service;
+
+     public Service getService() {
+        return service;
+     }
+}
+
+interface Service {
+     void doSomething();
+}
+
+class ServiceImpl implements Service {
+     @Override
+     public void doSomething() {
+         System.out.println("Service is running ... ");
+     }
+}
+```
+
+> _Bean class, Service interface, và ServiceImpl class_ có mối quan hệ ràng buộc với nhau không khác gì với ví dụ “Hello World” trong bài viết trước. _ServiceImpl class_ chỉ đơn giản là hiện thực lại _doSomething() method_ bằng cách in ra một dòng **_“Service is running ...”_**. _Bean class_ khai báo một thuộc tính tên là _“service”_ có type là _Service interface_. Điều khác biệt so với ví dụ “Hello world” là không còn bất kì _@Inject_ nào tại _property “service”_ hay tại bất cứ đâu. _Logic class_ của bạn khi này hoàn toàn **POJOs**.
+
+
+> Sau đó là chúng ta khởi tạo dữ liệu thông tin cấu hình:
+
+```
+abstract class Config implements Configurable {
+
+     @Override
+     public void configure() {
+
+        // Khởi tạo binding giữa Service interface và ServiceImpl class
+        attach(Service.class).to(ServiceImpl.class); (1)
+
+        // Khởi tạo một bean với ID là "Bean" trên với class là Bean class
+        bind("service").to(refMapping(Service.class))
+                      .in(Bean.class).id("Bean").scope(Scope.SINGLETON); (2)
+     }
+}
+```
+
+
+> Bước 1: Khởi tạo _binding_ giữa _Service interface_ và _ServiceImpl class_
+
+> Bước 2: Khởi tạo _bean_ với id là “Bean” trên _Bean class_. Tham số _“service”_ của _bind() method_chỉ định là _property_ với tên name là _“service”_ sẽ được ánh xạ đến đối tượng được khởi tạo bởi _Service.class_
+
+> + Tóm lược ý nghĩa của dòng này chỉ đơn giản là thông báo cho container biết rằng cần khởi tạo một _bean_ với _id_ là “Bean” được diễn dịch từ _Bean class_ với _scope_ là **_singleton_**. Vị trí cần _inject dependency_ là tại thuộc tính có name là _“service”_ và đối tượng _dependency_ được khởi tạo sẽ dựa trên thông tin ánh xạ từ _Service interface_ (đó chính là _bean_ được khởi tạo từ _ServiceImpl class_ - được cấu hình thông qua _attach() method_).
+
+> + Bạn có thể thay thế cách cấu hình bởi (1) và (2) bằng cách đơn giản hơn như sau:
+
+```
+                 bind("service").to(refMapping(ServiceImpl.class))
+                                  .in(Bean.class).id("Bean").scope(Scope.SINGLETON); (3)
+
+                 hoặc
+
+                 bind("service").to(new ServiceImpl())
+                                  .in(Bean.class).id("Bean").scope(Scope.SINGLETON); (4)
+```
+
+> Khi này dữ liệu _dependency_ sẽ trực tiếp được khởi tạo từ _ServiceImpl class_ (3) hoặc được khởi tạo trực tiếp thông qua từ khóa **new** (4). Lưu ý nếu như bạn sử dụng **new** để khởi tạo _dependency_ thì _dependency_ được khởi tạo sẽ không được hỗ trợ _DI, Scope, AOP, Interceptor ..._ hay có bất kì ràng buộc gì với _JGentle container_. Đó là 1 _object_ độc lập không chịu sự quản lý của _container_ và nằm ngoài _container_.
+
+
+> Sau khi hoàn tất cấu hình chúng ta có thể run thử ứng dụng:
+
+```
+         public static void main(String[] args) {
+
+              Provider provider = JGentle.buildProvider(Config.class);
+              Bean bean = (Bean) provider.getBean("Bean");
+              bean.getService().doSomething();
+
+         }
+
+```
+> Điều lưu ý duy nhất chỉ là tham số truyền khi này cho _getBean() method_ chính là _id_ của _bean_ hay chính là _name_ của _Definition_.
+
+
+> Thông qua cách cấu hình trên rõ ràng chúng ta có cùng một kết quả với các chỉ định _@Inject annotation_ trực tiếp trên các _logic classes_. Và bằng cách sử dụng các _methods ref(ID), refConstant(String constantName), refMapping(), refMapping(Class<?> clazz), refMapping(String mappingName)_ bạn có thể thoải mái thiết lập **_wiring_** giữa các _bean_ với nhau (cả các thiết lập _implicit lẫn explicit_) mà không gặp bất cứ một trở ngại nào. Việc cung cấp và hỗ trợ cả 2 phương án cấu hình _implicit và explitcit @Inject_ giúp cho các _logic classes_ mà _JGentle container_ quản lý thật sự **_POJOs_** khi cần nhưng cũng vẫn duy trì sự đơn giản cũng như trong sáng của _annotation_ khi cần thiết ở mức _class design_.
+
+> Bạn có thể [download example](http://jgentlegroup.googlegroups.com/web/TestClient.java?gda=oLTp00EAAAADH5kvQU2DR5XLa-C6mC-L9SzID7QUouNJ3IbdRfkEuV9UtMwtEVUeg03ya8hbI45TCT_pCLcFTwcI3Sro5jAzlXFeCn-cdYleF-vtiGpWAA&gsc=wGUfXBYAAADYVP0QI9XzfBNYKVWMJcd1n_jru2-fVACx0Irg8SkaKg) của bài viết này [tại đây](http://jgentlegroup.googlegroups.com/web/TestClient.java?gda=oLTp00EAAAADH5kvQU2DR5XLa-C6mC-L9SzID7QUouNJ3IbdRfkEuV9UtMwtEVUeg03ya8hbI45TCT_pCLcFTwcI3Sro5jAzlXFeCn-cdYleF-vtiGpWAA&gsc=wGUfXBYAAADYVP0QI9XzfBNYKVWMJcd1n_jru2-fVACx0Irg8SkaKg).
